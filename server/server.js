@@ -21,7 +21,14 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // Initialize database
-initDatabase();
+(async () => {
+  try {
+    await initDatabase();
+    console.log("✅ Database ready");
+  } catch (err) {
+    console.error("❌ Database init failed:", err.message);
+  }
+})();
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
