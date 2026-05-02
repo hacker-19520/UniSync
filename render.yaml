@@ -1,29 +1,17 @@
 services:
   - type: web
     name: unisync
+    root: server
     runtime: node
     plan: free
-    buildCommand: cd server && npm install && cd ../client && npm install && npm run build
-    startCommand: cd server && npm start
+    buildCommand: npm install
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
-        value: /opt/render/project/src/server/data/database.sqlite
+      - key: DATABASE_URL
+        value: postgresql://postgres:Macnitosh%4012@db.rwqhkghyqupucjuonkoi.supabase.co:5432/postgres
       - key: JWT_SECRET
         generateValue: true
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: 587
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
-        value: UniSync <noreply@unisync.com>
-    disk:
-      name: unisync-data
-      mountPath: /opt/render/project/src/server/data
-      sizeGB: 1
-
+      - key: PORT
+        value: 10000
