@@ -155,13 +155,15 @@ router.post('/login-request', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
+  let user;
   try {
     const { rows } = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
-    const user = rows[0];
+    user = rows[0];
     if (!user) return res.status(400).json({ error: 'Invalid credentials.' });
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(400).json({ error: 'Invalid credentials.' });
+
     if (!user.isverified) return res.status(400).json({ error: 'Please verify your email first.' });
     if (user.approvalstatus === 'rejected') {
       return res.status(403).json({
@@ -188,7 +190,16 @@ router.post('/login-request', async (req, res) => {
 
     res.json({ message: 'OTP sent to your email.', requiresOtp: true, mockOtp: otp });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Handle database connection errors
+    const errorMessage = err.message || '';
+    if (errorMessage.includes('password authentication failed') || errorMessage.includes('postgres')) {
+      return res.status(500).json({ error: 'password authentication failed for user "postgres"' });
+    }
+    if (errorMessage.includes('connection') || errorMessage.includes('ECONNREFUSED')) {
+      return res.status(500).json({ error: 'Database connection failed. Please try again later.' });
+    }
+    console.error('[LOGIN ERROR]', err.message);
+    return res.status(500).json({ error: 'Login failed. Please try again.' });
   }
 });
 
@@ -239,6 +250,15 @@ router.post('/verify-login-otp', async (req, res) => {
       },
     });
   } catch (err) {
+    // Handle database connection errors
+    const errorMessage = err.message || '';
+    if (errorMessage.includes('password authentication failed') || errorMessage.includes('postgres')) {
+      return res.status(500).json({ error: 'password authentication failed for user "postgres"' });
+    }
+    if (errorMessage.includes('connection') || errorMessage.includes('ECONNREFUSED')) {
+      return res.status(500).json({ error: 'Database connection failed. Please try again later.' });
+    }
+    console.error('[VERIFY OTP ERROR]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
