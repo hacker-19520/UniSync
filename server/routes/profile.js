@@ -1,16 +1,15 @@
-const express = require('express');
-const { authMiddleware } = require('../middleware/auth');
-const { pool } = require('../database');
+import express from 'express';
+import { authMiddleware } from '../../middleware/auth.js';
+import sql from '../../database.js';
 const router = express.Router();
 
 // Get current user profile
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id, name, email, rollNo, sapId, university, department, course, shift, section, semester, image, reason, qualities, createdAt 
-       FROM users WHERE id = $1`,
-      [req.userId]
-    );
+    const rows = await sql`
+      SELECT id, name, email, "rollNo", "sapId", university, department, course, shift, section, semester, image, reason, qualities, "createdAt" 
+      FROM users WHERE id = ${req.userId}
+    `;
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'User not found.' });
     res.json({ user });
@@ -23,10 +22,20 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.put('/me', authMiddleware, async (req, res) => {
   const { name, university, department, course, shift, section, semester, image, reason, qualities } = req.body;
   try {
-    await pool.query(
-      `UPDATE users SET name = $1, university = $2, department = $3, course = $4, shift = $5, section = $6, semester = $7, image = $8, reason = $9, qualities = $10 WHERE id = $11`,
-      [name, university, department, course, shift, section, semester, image, reason, qualities, req.userId]
-    );
+    await sql`
+      UPDATE users SET 
+        name = ${name}, 
+        university = ${university}, 
+        department = ${department}, 
+        course = ${course}, 
+        shift = ${shift}, 
+        section = ${section}, 
+        semester = ${semester}, 
+        image = ${image}, 
+        reason = ${reason}, 
+        qualities = ${qualities} 
+      WHERE id = ${req.userId}
+    `;
     res.json({ message: 'Profile updated successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -36,17 +45,17 @@ router.put('/me', authMiddleware, async (req, res) => {
 // Get all users (for finding matches) - exclude current user
 router.get('/users', authMiddleware, async (req, res) => {
   try {
-    const { rows: users } = await pool.query(
-      `SELECT id, name, rollNo, sapId, university, department, course, shift, section, semester, image, reason, qualities 
-       FROM users 
-       WHERE id != $1 AND isVerified = 1 AND university = (SELECT university FROM users WHERE id = $1)
-       ORDER BY createdAt DESC`,
-      [req.userId]
-    );
+    const users = await sql`
+      SELECT id, name, "rollNo", "sapId", university, department, course, shift, section, semester, image, reason, qualities 
+      FROM users 
+      WHERE id != ${req.userId} AND "isVerified" = 1 AND university = (SELECT university FROM users WHERE id = ${req.userId})
+      ORDER BY "createdAt" DESC
+    `;
     res.json({ users });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = router;
+export default router;
+

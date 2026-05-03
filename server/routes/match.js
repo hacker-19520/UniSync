@@ -1,6 +1,6 @@
-const express = require('express');
-const { authMiddleware } = require('../middleware/auth');
-const { pool } = require('../database');
+import express from 'express';
+import { authMiddleware } from '../../middleware/auth.js';
+import sql from '../../database.js';
 const router = express.Router();
 
 // Send a connection request
@@ -12,19 +12,19 @@ router.post('/request', authMiddleware, async (req, res) => {
   if (receiverId == senderId) return res.status(400).json({ error: 'Cannot send request to yourself.' });
 
   try {
-    const { rows: existingRows } = await pool.query(
-      `SELECT * FROM requests WHERE (senderId = $1 AND receiverId = $2) OR (senderId = $2 AND receiverId = $1)`,
-      [senderId, receiverId]
-    );
+    const existingRows = await sql`
+      SELECT * FROM requests WHERE (senderId = ${senderId} AND receiverId = ${receiverId}) OR (senderId = ${receiverId} AND receiverId = ${senderId})
+    `;
     if (existingRows.length > 0) {
       return res.status(400).json({ error: 'Request already exists between you and this user.' });
     }
 
-    const result = await pool.query(
-      `INSERT INTO requests (senderId, receiverId, status) VALUES ($1, $2, 'pending') RETURNING id`,
-      [senderId, receiverId]
-    );
-    res.status(201).json({ message: 'Request sent successfully.', requestId: result.rows[0].id });
+    const [result] = await sql`
+      INSERT INTO requests (senderId, receiverId, status) 
+      VALUES (${senderId}, ${receiverId}, 'pending') 
+      RETURNING id
+    `;
+    res.status(201).json({ message: 'Request sent successfully.', requestId: result.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -36,10 +36,10 @@ router.post('/accept/:id', authMiddleware, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const { rows } = await pool.query(`SELECT * FROM requests WHERE id = $1 AND receiverId = $2 AND status = 'pending'`, [requestId, userId]);
+    const rows = await sql`SELECT * FROM requests WHERE id = ${requestId} AND receiverId = ${userId} AND status = 'pending'`;
     if (rows.length === 0) return res.status(404).json({ error: 'Request not found or already processed.' });
 
-    await pool.query(`UPDATE requests SET status = 'accepted' WHERE id = $1`, [requestId]);
+    await sql`UPDATE requests SET status = 'accepted' WHERE id = ${requestId}`;
     res.json({ message: 'Request accepted. You can now chat!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -52,10 +52,10 @@ router.post('/reject/:id', authMiddleware, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const { rows } = await pool.query(`SELECT * FROM requests WHERE id = $1 AND receiverId = $2 AND status = 'pending'`, [requestId, userId]);
+    const rows = await sql`SELECT * FROM requests WHERE id = ${requestId} AND receiverId = ${userId} AND status = 'pending'`;
     if (rows.length === 0) return res.status(404).json({ error: 'Request not found or already processed.' });
 
-    await pool.query(`UPDATE requests SET status = 'rejected' WHERE id = $1`, [requestId]);
+    await sql`UPDATE requests SET status = 'rejected' WHERE id = ${requestId}`;
     res.json({ message: 'Request rejected.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -67,14 +67,13 @@ router.get('/my-requests', authMiddleware, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const { rows: requests } = await pool.query(
-      `SELECT r.*, u.name, u.university, u.department, u.image 
-       FROM requests r
-       JOIN users u ON r.receiverId = u.id
-       WHERE r.senderId = $1
-       ORDER BY r.createdAt DESC`,
-      [userId]
-    );
+    const requests = await sql`
+      SELECT r.*, u.name, u.university, u.department, u.image 
+      FROM requests r
+      JOIN users u ON r.receiverId = u.id
+      WHERE r.senderId = ${userId}
+      ORDER BY r."createdAt" DESC
+    `;
     res.json({ requests });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -86,14 +85,13 @@ router.get('/requests-for-me', authMiddleware, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const { rows: requests } = await pool.query(
-      `SELECT r.*, u.name, u.university, u.department, u.image 
-       FROM requests r
-       JOIN users u ON r.senderId = u.id
-       WHERE r.receiverId = $1 AND r.status = 'pending'
-       ORDER BY r.createdAt DESC`,
-      [userId]
-    );
+    const requests = await sql`
+      SELECT r.*, u.name, u.university, u.department, u.image 
+      FROM requests r
+      JOIN users u ON r.senderId = u.id
+      WHERE r.receiverId = ${userId} AND r.status = 'pending'
+      ORDER BY r."createdAt" DESC
+    `;
     res.json({ requests });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -105,55 +103,55 @@ router.get('/my-matches', authMiddleware, async (req, res) => {
   const userId = req.userId;
 
   try {
-    const { rows: matches } = await pool.query(
-      `SELECT r.*, 
+    const matches = await sql`
+      SELECT r.*, 
         CASE 
-          WHEN r.senderId = $1 THEN r.receiverId 
+          WHEN r.senderId = ${userId} THEN r.receiverId 
           ELSE r.senderId 
         END as matchId,
         CASE 
-          WHEN r.senderId = $1 THEN u2.name 
+          WHEN r.senderId = ${userId} THEN u2.name 
           ELSE u1.name 
         END as matchName,
         CASE 
-          WHEN r.senderId = $1 THEN u2.university 
+          WHEN r.senderId = ${userId} THEN u2.university 
           ELSE u1.university 
         END as matchUniversity,
         CASE 
-          WHEN r.senderId = $1 THEN u2.department 
+          WHEN r.senderId = ${userId} THEN u2.department 
           ELSE u1.department 
         END as matchDepartment,
         CASE 
-          WHEN r.senderId = $1 THEN u2.course 
+          WHEN r.senderId = ${userId} THEN u2.course 
           ELSE u1.course 
         END as matchCourse,
         CASE 
-          WHEN r.senderId = $1 THEN u2.shift 
+          WHEN r.senderId = ${userId} THEN u2.shift 
           ELSE u1.shift 
         END as matchShift,
         CASE 
-          WHEN r.senderId = $1 THEN u2.section 
+          WHEN r.senderId = ${userId} THEN u2.section 
           ELSE u1.section 
         END as matchSection,
         CASE 
-          WHEN r.senderId = $1 THEN u2.semester 
+          WHEN r.senderId = ${userId} THEN u2.semester 
           ELSE u1.semester 
         END as matchSemester,
         CASE 
-          WHEN r.senderId = $1 THEN u2.image 
+          WHEN r.senderId = ${userId} THEN u2.image 
           ELSE u1.image 
         END as matchImage
-       FROM requests r
-       JOIN users u1 ON r.senderId = u1.id
-       JOIN users u2 ON r.receiverId = u2.id
-       WHERE (r.senderId = $1 OR r.receiverId = $1) AND r.status = 'accepted'
-       ORDER BY r.createdAt DESC`,
-      [userId]
-    );
+      FROM requests r
+      JOIN users u1 ON r.senderId = u1.id
+      JOIN users u2 ON r.receiverId = u2.id
+      WHERE (r.senderId = ${userId} OR r.receiverId = ${userId}) AND r.status = 'accepted'
+      ORDER BY r."createdAt" DESC
+    `;
     res.json({ matches });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = router;
+export default router;
+

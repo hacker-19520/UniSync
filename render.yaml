@@ -4,13 +4,13 @@ services:
     root: server
     runtime: node
     plan: free
-    buildCommand: npm ci
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        value: postgresql://postgres:Macnitosh%4012@db.rwqhkghyqupucjuonkoi.supabase.co:5432/postgres
+- key: DATABASE_URL
+        value: postgresql://postgres.rwqhkghyqupucjuonkoi:Macnitosh%40@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
       - key: JWT_SECRET
         generateValue: true
       - key: PORT

@@ -1,4 +1,5 @@
-const { pool } = require('../database');
+import { Server } from 'socket.io';
+import sql from '../../database.js';
 
 // Express routes for messages
 function createMessageRoutes(router, authMiddleware) {
@@ -13,24 +14,24 @@ function createMessageRoutes(router, authMiddleware) {
     }
 
     try {
-      const { rows: requestRows } = await pool.query(
-        `SELECT * FROM requests WHERE id = $1 AND status = 'accepted' AND (senderId = $2 OR receiverId = $2)`,
-        [requestId, senderId]
-      );
+      const requestRows = await sql`
+        SELECT * FROM requests WHERE id = ${requestId} AND status = 'accepted' AND (senderId = ${senderId} OR receiverId = ${senderId})
+      `;
       const request = requestRows[0];
       if (!request) return res.status(403).json({ error: 'You can only message accepted matches.' });
 
-      const result = await pool.query(
-        `INSERT INTO messages (requestId, senderId, content) VALUES ($1, $2, $3) RETURNING id, createdAt`,
-        [requestId, senderId, content.trim()]
-      );
+      const [result] = await sql`
+        INSERT INTO messages (requestId, senderId, content) 
+        VALUES (${requestId}, ${senderId}, ${content.trim()}) 
+        RETURNING id, "createdAt"
+      `;
 
       const message = {
-        id: result.rows[0].id,
+        id: result.id,
         requestId: parseInt(requestId, 10),
         senderId,
         content: content.trim(),
-        createdAt: result.rows[0].createdat,
+        createdAt: result.createdAt,
       };
 
       res.status(201).json({ message: 'Message sent.', data: message });
@@ -45,21 +46,19 @@ function createMessageRoutes(router, authMiddleware) {
     const userId = req.userId;
 
     try {
-      const { rows: requestRows } = await pool.query(
-        `SELECT * FROM requests WHERE id = $1 AND status = 'accepted' AND (senderId = $2 OR receiverId = $2)`,
-        [requestId, userId]
-      );
+      const requestRows = await sql`
+        SELECT * FROM requests WHERE id = ${requestId} AND status = 'accepted' AND (senderId = ${userId} OR receiverId = ${userId})
+      `;
       const request = requestRows[0];
       if (!request) return res.status(403).json({ error: 'You can only view messages for your accepted matches.' });
 
-      const { rows: messages } = await pool.query(
-        `SELECT m.id, m.requestId, m.senderId, m.content, m.createdAt, u.name as sendername, u.image as senderimage
-         FROM messages m
-         JOIN users u ON m.senderId = u.id
-         WHERE m.requestId = $1
-         ORDER BY m.createdAt ASC`,
-        [requestId]
-      );
+      const messages = await sql`
+        SELECT m.id, m.requestId, m.senderId, m.content, m."createdAt", u.name as "sendername", u.image as "senderimage"
+        FROM messages m
+        JOIN users u ON m.senderId = u.id
+        WHERE m.requestId = ${requestId}
+        ORDER BY m."createdAt" ASC
+      `;
       res.json({ messages });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -82,27 +81,27 @@ function setupSocketIO(io) {
 
     socket.on('send_message', async ({ requestId, senderId, content }) => {
       try {
-        const { rows: requestRows } = await pool.query(
-          `SELECT * FROM requests WHERE id = $1 AND status = 'accepted' AND (senderId = $2 OR receiverId = $2)`,
-          [requestId, senderId]
-        );
+        const requestRows = await sql`
+          SELECT * FROM requests WHERE id = ${requestId} AND status = 'accepted' AND (senderId = ${senderId} OR receiverId = ${senderId})
+        `;
         const request = requestRows[0];
         if (!request) return;
 
-        const result = await pool.query(
-          `INSERT INTO messages (requestId, senderId, content) VALUES ($1, $2, $3) RETURNING id, createdAt`,
-          [requestId, senderId, content]
-        );
+        const [result] = await sql`
+          INSERT INTO messages (requestId, senderId, content) 
+          VALUES (${requestId}, ${senderId}, ${content}) 
+          RETURNING id, "createdAt"
+        `;
 
-        const { rows: userRows } = await pool.query(`SELECT id, name, image FROM users WHERE id = $1`, [senderId]);
+        const userRows = await sql`SELECT id, name, image FROM users WHERE id = ${senderId}`;
         const user = userRows[0];
 
         const messageData = {
-          id: result.rows[0].id,
+          id: result.id,
           requestId: parseInt(requestId, 10),
           senderId,
           content,
-          createdAt: result.rows[0].createdat,
+          createdAt: result.createdAt,
           senderName: user?.name || 'Unknown',
           senderImage: user?.image || null,
         };
@@ -120,4 +119,5 @@ function setupSocketIO(io) {
   });
 }
 
-module.exports = { createMessageRoutes, setupSocketIO };
+export { createMessageRoutes, setupSocketIO };
+
