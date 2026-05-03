@@ -1,7 +1,6 @@
 {
   "framework": "vite",
-  "installCommand": "cd client && npm install",
-  "buildCommand": "cd client && npm run build",
+  "buildCommand": "cd client && npm install && npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [
     { "source": "/api(.*)", "destination": "https://unisync-u9dz.onrender.com/api$1" },
