@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api(.*)", "destination": "https://YOUR-CYCLIC-URL/api$1" },
+    { "source": "/socket.io(.*)", "destination": "https://YOUR-CYCLIC-URL/socket.io$1" }
+  ]
+}

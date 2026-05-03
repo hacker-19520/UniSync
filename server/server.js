@@ -1,12 +1,16 @@
-require("dotenv").config();
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const http = require('http');
-const { Server } = require('socket.io');
-const { initDatabase } = require('./database');
-const { authMiddleware } = require('./middleware/auth');
-const { createMessageRoutes, setupSocketIO } = require('./routes/chat');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import http from 'http';
+import { Server } from 'socket.io';
+import sql from './database.js';
+import { authMiddleware } from './middleware/auth.js';
+import { createMessageRoutes, setupSocketIO } from './routes/chat.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -20,20 +24,13 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Initialize database
-(async () => {
-  try {
-    await initDatabase();
-    console.log("✅ Database ready");
-  } catch (err) {
-    console.error("❌ Database init failed:", err.message);
-  }
-})();
+// Database ready (postgres lib auto-connects)
+console.log("✅ Database ready");
 
 // API Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/profile', require('./routes/profile'));
-app.use('/api/match', require('./routes/match'));
+app.use('/api/auth', await import('./routes/auth.js'));
+app.use('/api/profile', await import('./routes/profile.js'));
+app.use('/api/match', await import('./routes/match.js'));
 
 // Chat routes (requires authMiddleware)
 const chatRouter = express.Router();
@@ -41,7 +38,7 @@ createMessageRoutes(chatRouter, authMiddleware);
 app.use('/api', chatRouter);
 
 // Admin routes
-app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin', await import('./routes/admin.js'));
 
 // Socket.io for real-time chat
 setupSocketIO(io);
@@ -64,4 +61,3 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 UniSync server running on port ${PORT}`);
   console.log(`📧 Email OTP: ${process.env.SMTP_USER ? 'Configured' : 'Mock mode (check console)'}`);
 });
-
